@@ -1,0 +1,198 @@
+// Digital Wardrobe & AI Outfit Generator — Prisma schema
+// Phase 1 scope: User + ClothingItem, with real endpoints.
+// Outfit / GenerationSession are modeled now (per 02-data-model.md) so the
+// schema doesn't need reworking in Phase 2, but they are NOT exposed via
+// API routes yet — that's Phase 2 work.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Category {
+  top
+  bottom
+  dress
+  outerwear
+  shoes
+  accessory
+  bag
+  swimwear
+}
+
+enum ItemMaterial {
+  cotton
+  linen
+  wool
+  silk
+  denim
+  leather
+  cashmere
+  synthetic
+  other
+}
+
+enum Season {
+  spring
+  summer
+  fall
+  winter
+  all
+}
+
+model User {
+  id                 String                   @id @default(uuid())
+  name               String
+  email              String                   @unique
+  passwordHash       String
+  phone              String?
+  avatarUrl          String?
+  theme              String                   @default("gold") // "gold" | "dark" | "light" — Profile settings (next pass)
+  weatherEnabled     Boolean                  @default(true) // Profile > Preferences toggle — lets Ava's own weather-context lookup be turned off even when location permission is granted; independent of that permission
+  acceptedPoliciesAt DateTime?
+  stylePreferences   Json?
+  createdAt          DateTime                 @default(now())
+  items              ClothingItem[]
+  outfits            Outfit[]
+  sessions           GenerationSession[]
+  preferenceSignals  StylePreferenceSignal[]
+  events             Event[]
+  recommendations    Recommendation[]
+}
+
+model ClothingItem {
+  id          String        @id @default(uuid())
+  userId      String
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  imageUrl    String?
+  category    Category
+  subcategory String
+  color       String
+  material    ItemMaterial
+  season      Season
+  brand       String?
+  tags        String[]      @default([])
+  isFavorite  Boolean       @default(false)
+  archived    Boolean       @default(false)
+  dateAdded   DateTime      @default(now())
+  lastWornAt  DateTime?
+
+  @@index([userId])
+  @@index([userId, category])
+}
+
+// --- Phase 2+ models, schema only, no routes yet ---
+
+model Outfit {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name       String?
+  occasion   String
+  itemIds    String[]
+  eventId    String?  // soft reference, no FK — same reasoning as StylePreferenceSignal.sessionId: an
+                       // outfit should survive even if the Event it was generated for is later deleted
+  isFavorite Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  wornDates  DateTime[] @default([])
+
+  @@index([userId])
+  @@index([userId, eventId])
+}
+
+model GenerationSession {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages  Json     @default("[]")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// My Events (Phase 4). linkedOutfitId is a soft reference (no FK/cascade)
+// on purpose — same reasoning as StylePreferenceSignal.sessionId: an
+// event should survive even if the linked Outfit is later deleted from
+// the Outfits gallery, rather than the two being forced to rise and fall
+// together.
+model Event {
+  id              String    @id @default(uuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name            String
+  date            DateTime
+  occasionType    String
+  dressCode       String?
+  location        String?
+  linkedOutfitId  String?
+  weatherSnapshot Json?
+  createdAt       DateTime  @default(now())
+
+  @@index([userId])
+  @@index([userId, date])
+}
+
+enum PreferenceRating {
+  up
+  down
+}
+
+enum RecommendationType {
+  shopping_item // Phase 5 only — nothing writes this yet
+  gap_analysis
+}
+
+// Smart Closet (Phase 4). Matches the Recommendation entity drafted in
+// 02-data-model.md. `key` is a stable, deterministically-computed string
+// (e.g. "gap:shoes:formal") used to dedupe/upsert — see
+// smartCloset.controller.js: an unchanged gap doesn't get re-phrased by
+// the model on every request, only genuinely new gaps do. `payload` holds
+// the phrased text plus the supporting numbers, never itemIds or anything
+// that would couple this to GenerationSession — see the hard boundary in
+// 03-ai-integration.md: gap_analysis must never share a prompt, session,
+// or code path with outfit generation or shopping recommendations.
+model Recommendation {
+  id          String             @id @default(uuid())
+  userId      String
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        RecommendationType
+  key         String
+  payload     Json
+  source      String?
+  dismissedAt DateTime?
+  createdAt   DateTime           @default(now())
+
+  @@unique([userId, key])
+  @@index([userId, type])
+}
+
+// Deliberately isolated from every other model — never joined into normal
+// app queries (Generate, Wardrobe, Outfits all work with zero knowledge
+// this table exists). Its only purpose is to accumulate real preference
+// data (outfit + occasion + AI rationale + thumbs up/down) so that a
+// future custom style-reasoning model — IF the trigger conditions in
+// 12_ARHITECTURA_AI_SI_COMPUTER_VISION1.md §7 are ever actually met —
+// has real training data instead of zero. It does not feed back into the
+// live generation prompt; nothing here personalizes today's suggestions.
+// sessionId is a soft reference (no FK / no cascade) on purpose: a signal
+// must survive even if its GenerationSession is later deleted — the
+// historical record matters more than referential tidiness here.
+model StylePreferenceSignal {
+  id        String           @id @default(uuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionId String?
+  occasion  String
+  itemIds   String[]
+  rationale String?
+  rating    PreferenceRating
+  createdAt DateTime         @default(now())
+
+  @@index([userId])
+  @@index([rating])
+}

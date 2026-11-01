@@ -23,13 +23,22 @@ async function sendContactEmail({ fromName, fromEmail, subject, message }) {
   const to = process.env.CONTACT_EMAIL_TO || 'cristianpoenaru7@gmail.com';
   const from = process.env.CONTACT_EMAIL_FROM || 'Closetry <onboarding@resend.dev>';
 
-  return resend.emails.send({
+  const result = await resend.emails.send({
     from,
     to,
     replyTo: fromEmail, // reply in your inbox goes straight back to the user
     subject: `[Closetry] ${subject || 'New contact message'}`,
     text: `From: ${fromName} <${fromEmail}>\n\n${message}`,
   });
+
+  // Resend's SDK reports API-level failures (unverified sender, sandbox
+  // restrictions, a bad key) in `result.error` rather than throwing — left
+  // unchecked, the user would see "Message sent ✓" for an email that never
+  // went anywhere.
+  if (result?.error) {
+    throw new Error(`Resend rejected the message: ${result.error.message || result.error.name || 'unknown error'}`);
+  }
+  return result;
 }
 
 module.exports = { sendContactEmail, EmailConfigError };

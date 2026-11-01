@@ -2,10 +2,12 @@ const prisma = require('../config/db');
 const { hashPassword, verifyPassword } = require('../utils/authUtils');
 const { isValidEmail, isNonEmptyString, THEME_NAMES } = require('../utils/validators');
 const { PUBLIC_USER_FIELDS } = require('./auth.controller');
-const { isConfigured: cloudinaryConfigured, uploadImage, optimizeDeliveryUrl } = require('../config/cloudinary');
+const {
+  isConfigured: cloudinaryConfigured, uploadImage, optimizeDeliveryUrl, deleteImageByUrl, deleteUserImages,
+} = require('../config/cloudinary');
 const { saveLocalFallback } = require('../config/upload');
 
-// PATCH /api/users/me — Body: any subset of { name, email, phone, theme, weatherEnabled }
+// PATCH /api/users/me — Body: any subset of { name, email, phone, theme, weatherEnabled, aiConsent }
 // avatarUrl is deliberately NOT settable here — it only ever comes from
 // POST /api/users/me/avatar, which controls what gets uploaded/stored,
 // rather than letting a client set an arbitrary URL string.
@@ -30,6 +32,14 @@ async function updateMe(req, res, next) {
     if (req.body.weatherEnabled !== undefined) {
       if (typeof req.body.weatherEnabled !== 'boolean') return res.status(400).json({ error: 'weatherEnabled must be a boolean' });
       data.weatherEnabled = req.body.weatherEnabled;
+    }
+    // aiConsent: true records *when* the user agreed to send item photos /
+    // wardrobe text / chat messages to the third-party AI provider; false
+    // withdraws it. Stored as a timestamp (not a bare boolean) so there's a
+    // record of when consent was given — see App Store guideline 5.1.2(i).
+    if (req.body.aiConsent !== undefined) {
+      if (typeof req.body.aiConsent !== 'boolean') return res.status(400).json({ error: 'aiConsent must be a boolean' });
+      data.aiConsentAt = req.body.aiConsent ? new Date() : null;
     }
 
     const user = await prisma.user.update({ where: { id: req.userId }, data, select: PUBLIC_USER_FIELDS });
@@ -56,7 +66,11 @@ async function uploadAvatar(req, res, next) {
       avatarUrl = await saveLocalFallback(req.file.buffer, req.file.originalname, req.userId);
     }
 
+    const previous = await prisma.user.findUnique({ where: { id: req.userId }, select: { avatarUrl: true } });
     const user = await prisma.user.update({ where: { id: req.userId }, data: { avatarUrl }, select: PUBLIC_USER_FIELDS });
+    // The replaced picture shouldn't linger in image storage once nothing
+    // points at it anymore.
+    if (previous?.avatarUrl && previous.avatarUrl !== avatarUrl) await deleteImageByUrl(previous.avatarUrl, req.userId);
     res.json({ user });
   } catch (err) {
     next(err);
@@ -92,7 +106,11 @@ async function changePassword(req, res, next) {
 // action. Every other table cascades from User via onDelete: Cascade in
 // the schema, so this one delete removes everything — items, outfits,
 // sessions, events, feedback signals, recommendations — per the "real
-// delete, not archive" rule in 09_GHID_PRIVACY_SI_POLITICI.md.
+// delete, not archive" rule in 09_GHID_PRIVACY_SI_POLITICI.md. The photos
+// live outside the database (Cloudinary), so they're removed explicitly
+// right after: App Store guideline 5.1.1(v) requires deleting the account
+// *and* the personal data tied to it, and a user's clothing/profile photos
+// are exactly that.
 async function deleteMe(req, res, next) {
   try {
     const { password } = req.body;
@@ -104,6 +122,7 @@ async function deleteMe(req, res, next) {
     }
 
     await prisma.user.delete({ where: { id: req.userId } });
+    await deleteUserImages(req.userId);
     res.status(204).send();
   } catch (err) {
     next(err);

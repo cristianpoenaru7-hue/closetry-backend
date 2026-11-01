@@ -2,6 +2,7 @@ const prisma = require('../config/db');
 const { generateOutfits } = require('../services/generation.service');
 const { deriveSeasonFromMonth } = require('./weather.controller');
 const { fetchCurrentWeather, WeatherConfigError } = require('../config/weather');
+const { sendUnavailable } = require('../utils/unavailable');
 const { AnthropicConfigError } = require('../config/anthropic');
 
 // Only try to attach real weather to a pre-generated outfit if the event
@@ -147,6 +148,12 @@ async function deleteEvent(req, res, next) {
 // event's own date (works for any future date); contextTemp/weather only
 // gets attached when the event is within WEATHER_LOOKAHEAD_MS AND lat/lon
 // were provided, since we only have current-weather, not a forecast API.
+// What is stored on the event: conditions only. The place name OpenWeather
+// returns is deliberately NOT kept (the privacy policy says location is not saved).
+function toWeatherSnapshot(weather) {
+  return { tempC: weather.tempC ?? null, condition: weather.condition ?? null, description: weather.description ?? null };
+}
+
 async function generateOutfitForEvent(req, res, next) {
   try {
     const event = await prisma.event.findFirst({ where: { id: req.params.id, userId: req.userId } });
@@ -168,7 +175,7 @@ async function generateOutfitForEvent(req, res, next) {
         const weather = await fetchCurrentWeather(Number(lat), Number(lon));
         contextTemp = weather.tempC ?? undefined;
         weatherCondition = weather.condition ?? undefined;
-        weatherSnapshot = weather;
+        weatherSnapshot = toWeatherSnapshot(weather);
       } catch (err) {
         // Weather is a nice-to-have here too — a misconfigured/unset
         // OPENWEATHER_API_KEY should not block event outfit generation.
@@ -202,11 +209,11 @@ async function generateOutfitForEvent(req, res, next) {
 
     res.json({ outfits, note, contextSeason, contextTemp: contextTemp ?? null });
   } catch (err) {
-    if (err instanceof AnthropicConfigError) return res.status(503).json({ error: err.message });
+    if (err instanceof AnthropicConfigError) return sendUnavailable(res, err);
     next(err);
   }
 }
 
 module.exports = {
-  createEvent, listEvents, getEvent, updateEvent, deleteEvent, generateOutfitForEvent,
+  createEvent, listEvents, getEvent, updateEvent, deleteEvent, generateOutfitForEvent, toWeatherSnapshot,
 };

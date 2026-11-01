@@ -1,4 +1,5 @@
 const prisma = require('../config/db');
+const { sendUnavailable } = require('../utils/unavailable');
 const { sendContactEmail, EmailConfigError } = require('../config/email');
 
 const MAX_MESSAGE_LENGTH = 5000;
@@ -34,7 +35,7 @@ async function submitContact(req, res, next) {
 
     res.json({ sent: true });
   } catch (err) {
-    if (err instanceof EmailConfigError) return res.status(503).json({ error: err.message });
+    if (err instanceof EmailConfigError) return sendUnavailable(res, err);
     next(err);
   }
 }

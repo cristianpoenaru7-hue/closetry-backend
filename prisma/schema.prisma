@@ -54,6 +54,7 @@ model User {
   theme              String                   @default("gold") // "gold" | "dark" | "light" — Profile settings (next pass)
   weatherEnabled     Boolean                  @default(true) // Profile > Preferences toggle — lets Ava's own weather-context lookup be turned off even when location permission is granted; independent of that permission
   acceptedPoliciesAt DateTime?
+  aiConsentAt        DateTime?                // set when the user explicitly agrees to send photos/wardrobe text to the third-party AI provider (Anthropic); null = never agreed or withdrawn. Required by App Store guideline 5.1.2(i).
   stylePreferences   Json?
   createdAt          DateTime                 @default(now())
   items              ClothingItem[]

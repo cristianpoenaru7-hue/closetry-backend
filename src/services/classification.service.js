@@ -9,7 +9,10 @@ const { CATEGORIES, MATERIALS, SEASONS } = require('../utils/validators');
 // Messages API, just with an image content block here instead of
 // text-only.
 
-const MAX_UPLOAD_BYTES = 8 * 1024 * 1024; // matches config/upload.js's multer limit
+// Anthropic's image limit (5 MB) — lower than config/upload.js's 8 MB multer
+// limit on purpose: a photo between the two is fine to *save*, it just can't
+// be auto-identified, which is a note to the user, not a failure.
+const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 
 const SYSTEM_PROMPT = `You classify a single photographed clothing item for a wardrobe app. Look only at the item itself — ignore background, lighting, or any people in the shot.
 
@@ -69,7 +72,7 @@ function sanitizeSuggestion(parsed) {
 // touches the database.
 async function classifyItemPhoto(buffer, mimetype) {
   if (buffer.length > MAX_UPLOAD_BYTES) {
-    throw new Error('Photo is too large to classify');
+    return { suggestion: null, note: 'This photo is too large to identify automatically — enter its details below.' };
   }
 
   const raw = await createMessage({

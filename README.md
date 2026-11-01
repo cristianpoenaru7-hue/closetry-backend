@@ -516,3 +516,33 @@ defensively (handles non-JSON responses, invented item ids, missing
 fields) but you should run a handful of real generation turns yourself —
 including a follow-up like "something without the dress" — and tell me if
 the model's output shape ever surprises the parser.
+
+## App Store review hardening (October 2026)
+
+Changes made so the app meets Apple's App Review guidelines (5.1.1 data
+collection/deletion, 5.1.2 data sharing incl. third-party AI, 2.1 completeness):
+
+- **Public pages, no login** — `GET /privacy` (Privacy Policy + Terms of Use),
+  `GET /support`, and a landing page at `GET /`. These are the URLs that go in
+  App Store Connect (Privacy Policy URL, Support URL). Content lives in
+  `src/pages/*.html`; `src/routes/legal.routes.js` serves it. If you change what
+  the app collects or who it shares data with, update `privacy.html` **and** the
+  in-app copy (`PoliciesScreen.js` in the mobile project) together.
+- **AI consent** — `User.aiConsentAt` (migration `add_ai_consent`). The app sets
+  it with `PATCH /api/users/me { "aiConsent": true | false }` after showing the
+  explicit "Let Closetry use AI?" prompt; it is returned with the user object.
+  `GET /api/smart-closet` only sends facts to the AI provider for users who have
+  consented (others still get the plain-wording insights).
+- **Real deletion includes the photos** — deleting an item removes its image from
+  Cloudinary, and `DELETE /api/users/me` removes the user's whole
+  `wardrobe/<userId>/` folder (item photos + profile photo). Replacing the
+  profile photo deletes the old one. All best-effort and logged on failure.
+- **Errors** — unexpected 5xx responses return a generic message (details stay in
+  the server log); upload errors are proper 400/413s; the contact form now reports
+  a failed email send instead of saying "sent".
+- **Timeouts** — Anthropic (60s), background removal (60s), weather (8s); override
+  with `ANTHROPIC_TIMEOUT_MS` / `BG_REMOVAL_TIMEOUT_MS`.
+- **Logs** — access logs record the path only, never the query string (the
+  weather endpoint's query carries coordinates).
+- Optional env: `SUPPORT_EMAIL` (shown on the public pages; defaults to
+  `CONTACT_EMAIL_TO`).

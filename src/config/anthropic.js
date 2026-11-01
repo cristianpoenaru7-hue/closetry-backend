@@ -41,6 +41,9 @@ async function createMessage({ system, messages, maxTokens = 1024 }) {
       system,
       messages,
     }),
+    // Without a ceiling a stalled upstream call would hold the request (and
+    // the user's spinner) open for as long as the platform allows.
+    signal: AbortSignal.timeout(Number(process.env.ANTHROPIC_TIMEOUT_MS) || 60000),
   });
 
   if (!res.ok) {

@@ -1,3 +1,4 @@
+const { sendUnavailable } = require('../utils/unavailable');
 const { fetchCurrentWeather, WeatherConfigError } = require('../config/weather');
 
 // Season is derived from the calendar month, NOT from temperature —
@@ -30,7 +31,7 @@ async function getCurrentWeather(req, res, next) {
     const weather = await fetchCurrentWeather(lat, lon);
     res.json({ ...weather, season: deriveSeasonFromMonth() });
   } catch (err) {
-    if (err instanceof WeatherConfigError) return res.status(503).json({ error: err.message });
+    if (err instanceof WeatherConfigError) return sendUnavailable(res, err);
     next(err);
   }
 }

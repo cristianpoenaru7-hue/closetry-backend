@@ -8,7 +8,13 @@ async function removeBackground(buffer, filename = 'photo.jpg', mimetype = 'imag
   const form = new FormData();
   form.append('file', new Blob([buffer], { type: mimetype }), filename);
 
-  const res = await fetch(`${BG_REMOVAL_URL}/remove-background`, { method: 'POST', body: form });
+  // A slow or cold-starting service times out into the caller's existing
+  // "save the original photo instead" fallback rather than hanging the upload.
+  const res = await fetch(`${BG_REMOVAL_URL}/remove-background`, {
+    method: 'POST',
+    body: form,
+    signal: AbortSignal.timeout(Number(process.env.BG_REMOVAL_TIMEOUT_MS) || 60000),
+  });
 
   if (!res.ok) {
     const text = await res.text().catch(() => '');

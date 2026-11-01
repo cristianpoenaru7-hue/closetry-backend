@@ -43,7 +43,13 @@ async function getSmartCloset(req, res, next) {
 
     const newFacts = facts.filter((f) => !existingByKey.has(f.key));
     let phrasedByKey = new Map();
-    if (newFacts.length) {
+
+    // Phrasing sends these (already-computed) wardrobe facts to the
+    // third-party AI provider, so it only happens for users who explicitly
+    // agreed to AI features (User.aiConsentAt). Everyone else still gets the
+    // insights — just in the deterministic, plainer wording below.
+    const consenting = await prisma.user.findUnique({ where: { id: req.userId }, select: { aiConsentAt: true } });
+    if (newFacts.length && consenting?.aiConsentAt) {
       try {
         phrasedByKey = await phraseGapFacts(newFacts);
       } catch (err) {

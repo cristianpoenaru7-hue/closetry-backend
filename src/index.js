@@ -15,6 +15,7 @@ const eventsRoutes = require('./routes/events.routes');
 const smartClosetRoutes = require('./routes/smartCloset.routes');
 const contactRoutes = require('./routes/contact.routes');
 const usersRoutes = require('./routes/users.routes');
+const legalRoutes = require('./routes/legal.routes');
 const { errorHandler } = require('./middleware/errorHandler');
 const { generalLimiter, authLimiter } = require('./middleware/rateLimits');
 
@@ -26,6 +27,11 @@ const app = express();
 if (process.env.NODE_ENV === 'production') app.set('trust proxy', 1);
 
 app.use(helmet());
+
+// Access logs record the path only, never the query string — GET /api/weather
+// carries the user's coordinates in its query (?lat=&lon=), and location data
+// shouldn't end up sitting in log storage.
+morgan.token('url', (req) => (req.originalUrl || req.url || '').split('?')[0]);
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
 // CORS_ORIGIN unset = permissive (dev default). Set it to your actual
@@ -42,6 +48,9 @@ app.use(generalLimiter);
 app.use('/uploads', express.static(path.join(process.cwd(), process.env.UPLOAD_DIR || 'uploads')));
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
+
+// Public landing, Privacy Policy / Terms and Support pages (no login).
+app.use(legalRoutes);
 
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/items', itemsRoutes);

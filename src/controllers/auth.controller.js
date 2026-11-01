@@ -5,7 +5,7 @@ const { validateRegisterInput, validateLoginInput } = require('../utils/validato
 // Shared shape for every endpoint that returns a user — keeps
 // register/login/me consistent so the client never has to guess which
 // fields a given response includes.
-const PUBLIC_USER_FIELDS = { id: true, name: true, email: true, phone: true, avatarUrl: true, theme: true, weatherEnabled: true, createdAt: true };
+const PUBLIC_USER_FIELDS = { id: true, name: true, email: true, phone: true, avatarUrl: true, theme: true, weatherEnabled: true, aiConsentAt: true, createdAt: true };
 
 async function register(req, res, next) {
   try {
@@ -49,7 +49,7 @@ async function login(req, res, next) {
     res.json({
       user: {
         id: user.id, name: user.name, email: user.email, phone: user.phone,
-        avatarUrl: user.avatarUrl, theme: user.theme, weatherEnabled: user.weatherEnabled, createdAt: user.createdAt,
+        avatarUrl: user.avatarUrl, theme: user.theme, weatherEnabled: user.weatherEnabled, aiConsentAt: user.aiConsentAt, createdAt: user.createdAt,
       },
       token,
     });

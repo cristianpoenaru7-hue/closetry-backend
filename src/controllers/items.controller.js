@@ -1,9 +1,10 @@
 const prisma = require('../config/db');
 const { validateItemInput } = require('../utils/validators');
-const { isConfigured: cloudinaryConfigured, uploadImage, optimizeDeliveryUrl } = require('../config/cloudinary');
+const { isConfigured: cloudinaryConfigured, uploadImage, optimizeDeliveryUrl, deleteImageByUrl } = require('../config/cloudinary');
 const { removeBackground } = require('../config/backgroundRemoval');
 const { saveLocalFallback } = require('../config/upload');
 const { classifyItemPhoto } = require('../services/classification.service');
+const { sendUnavailable } = require('../utils/unavailable');
 const { AnthropicConfigError } = require('../config/anthropic');
 
 // POST /api/items/classify (multipart/form-data, field "photo")
@@ -20,9 +21,14 @@ async function classifyItem(req, res, next) {
     res.json({ suggestion, note });
   } catch (err) {
     if (err instanceof AnthropicConfigError) {
-      return res.status(503).json({ error: err.message });
+      return sendUnavailable(res, err);
     }
-    next(err);
+    // Auto-tagging is only ever a convenience — the client falls back to
+    // manual entry on any failure — so an upstream hiccup (rate limit,
+    // overload, a photo the model rejects) becomes a plain, user-readable
+    // note instead of a server error carrying the provider's raw response.
+    console.error('Item classification failed:', err);
+    res.status(502).json({ error: "Couldn't identify this item automatically — enter its details below." });
   }
 }
 
@@ -154,6 +160,14 @@ async function updateItem(req, res, next) {
       data,
     });
 
+    // A replaced photo shouldn't linger in image storage once nothing of
+    // this user's points at it (same pattern as the avatar). deleteImageByUrl
+    // only ever deletes inside the user's own folder.
+    if (existing.imageUrl && data.imageUrl !== undefined && data.imageUrl !== existing.imageUrl) {
+      const stillUsed = await prisma.clothingItem.count({ where: { userId: req.userId, imageUrl: existing.imageUrl } });
+      if (!stillUsed) await deleteImageByUrl(existing.imageUrl, req.userId);
+    }
+
     res.json({ item });
   } catch (err) {
     next(err);
@@ -171,6 +185,14 @@ async function deleteItem(req, res, next) {
     if (!existing) return res.status(404).json({ error: 'Item not found' });
 
     await prisma.clothingItem.delete({ where: { id: req.params.id } });
+
+    // "Real delete" has to include the photo itself, not just its database
+    // row — otherwise the image stays reachable at its public URL forever.
+    // Skipped if another item of the same user still points at the same URL.
+    if (existing.imageUrl) {
+      const stillUsed = await prisma.clothingItem.count({ where: { userId: req.userId, imageUrl: existing.imageUrl } });
+      if (!stillUsed) await deleteImageByUrl(existing.imageUrl, req.userId);
+    }
     res.status(204).send();
   } catch (err) {
     next(err);

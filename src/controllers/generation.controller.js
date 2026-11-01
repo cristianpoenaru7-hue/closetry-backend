@@ -1,5 +1,6 @@
 const prisma = require('../config/db');
 const { generateOutfits } = require('../services/generation.service');
+const { sendUnavailable } = require('../utils/unavailable');
 const { AnthropicConfigError } = require('../config/anthropic');
 
 const SEASONS = ['spring', 'summer', 'fall', 'winter', 'all'];
@@ -119,7 +120,7 @@ async function postMessage(req, res, next) {
     });
   } catch (err) {
     if (err instanceof AnthropicConfigError) {
-      return res.status(503).json({ error: err.message });
+      return sendUnavailable(res, err);
     }
     next(err);
   }

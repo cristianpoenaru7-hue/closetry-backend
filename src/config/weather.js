@@ -15,7 +15,7 @@ async function fetchCurrentWeather(lat, lon) {
   }
 
   const url = `${OPENWEATHER_URL}?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric`;
-  const res = await fetch(url);
+  const res = await fetch(url, { signal: AbortSignal.timeout(8000) }); // weather is a nice-to-have; never hold a request open for it
 
   if (!res.ok) {
     const text = await res.text().catch(() => '');

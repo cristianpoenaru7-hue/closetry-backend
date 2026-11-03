@@ -544,5 +544,6 @@ collection/deletion, 5.1.2 data sharing incl. third-party AI, 2.1 completeness):
   with `ANTHROPIC_TIMEOUT_MS` / `BG_REMOVAL_TIMEOUT_MS`.
 - **Logs** — access logs record the path only, never the query string (the
   weather endpoint's query carries coordinates).
+- Sign in with Apple / Google env (names only; values live in Railway): `APPLE_BUNDLE_ID`, `GOOGLE_IOS_CLIENT_ID`, `GOOGLE_WEB_CLIENT_ID`, and optionally `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_SIGN_IN_PRIVATE_KEY` (Apple token revocation on account deletion). See `.env.example`.
 - Optional env: `SUPPORT_EMAIL` (shown on the public pages; defaults to
   `CONTACT_EMAIL_TO`).

@@ -25,9 +25,10 @@ test('GET /privacy serves a complete policy page without a login', async () => {
     assert.match(res.headers.get('content-type'), /text\/html/);
     const html = await res.text();
     // The elements App Review guideline 5.1.1(i)/5.1.2(i) look for.
-    for (const phrase of ['Anthropic', 'Delete account', 'How long we keep data', 'Withdraw consent', 'Terms of Use', 'Cloudinary', 'OpenWeather']) {
+    for (const phrase of ['Anthropic', 'Delete account', 'How long we keep data', 'Withdraw consent', 'Terms of Use', 'Cloudinary', 'OpenWeather', 'Sign in with Apple', 'Google', 'provider user ID']) {
       assert.ok(html.includes(phrase), `privacy page should mention "${phrase}"`);
     }
+    assert.ok(html.includes('Apple or Google if you signed up that way'), 'deletion row covers social accounts');
     assert.ok(!html.includes('{{'), 'no unreplaced template placeholders');
     assert.ok(!/Draft/i.test(html), 'no draft/placeholder marker left in the live policy');
   });

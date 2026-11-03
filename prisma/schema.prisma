@@ -55,6 +55,7 @@ model User {
   weatherEnabled     Boolean                  @default(true) // Profile > Preferences toggle — lets Ava's own weather-context lookup be turned off even when location permission is granted; independent of that permission
   acceptedPoliciesAt DateTime?
   aiConsentAt        DateTime?                // set when the user explicitly agrees to send photos/wardrobe text to the third-party AI provider (Anthropic); null = never agreed or withdrawn. Required by App Store guideline 5.1.2(i).
+  passwordDisabledAt DateTime?                // set when the account has no usable password (created via Apple/Google, or the old password was invalidated when a social identity was linked); null = normal password account
   stylePreferences   Json?
   createdAt          DateTime                 @default(now())
   items              ClothingItem[]
@@ -63,6 +64,22 @@ model User {
   preferenceSignals  StylePreferenceSignal[]
   events             Event[]
   recommendations    Recommendation[]
+  identities         AuthIdentity[]
+}
+
+// Sign in with Apple / Google. providerUserId is the token's stable `sub`.
+// email is kept only for support/debugging and may be an Apple private-relay address.
+model AuthIdentity {
+  id             String   @id @default(uuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider       String   // "apple" | "google"
+  providerUserId String
+  email          String?
+  createdAt      DateTime @default(now())
+
+  @@unique([provider, providerUserId])
+  @@index([userId])
 }
 
 model ClothingItem {

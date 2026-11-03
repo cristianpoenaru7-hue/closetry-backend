@@ -26,7 +26,10 @@ function errorHandler(err, req, res, next) {
   // above; the client gets a plain sentence instead. 4xx errors are ones we
   // deliberately raised with a user-facing message, so those pass through.
   const message = status >= 500 ? 'Something went wrong on our side. Please try again.' : err.message || 'Request failed';
-  res.status(status).json({ error: message });
+  // Optional machine-readable code that a client can branch on (4xx only).
+  const body = { error: message };
+  if (status < 500 && typeof err.clientCode === 'string') body.code = err.clientCode;
+  res.status(status).json(body);
 }
 
 module.exports = { errorHandler };

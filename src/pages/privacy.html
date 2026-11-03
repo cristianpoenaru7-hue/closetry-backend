@@ -24,7 +24,7 @@
 
 <h2 id="collect">2. What we collect, and how</h2>
 <table>
-  <tr><th>Account</th><td>Name and email address, a password (stored only as a salted hash — we cannot read it), and optionally a phone number and profile photo. We also keep your theme, weather and AI preferences, and the date you accepted this policy and, if you gave it, your AI consent. <em>You give us this directly when you register or edit your profile.</em></td></tr>
+  <tr><th>Account</th><td>Name and email address, a password (stored only as a salted hash — we cannot read it) or, if you use <strong>Sign in with Apple</strong> or <strong>Google</strong>, the details those providers share with us: a provider user ID, your name (optional) and your email address (for Apple this can be a private relay address; we never receive your Apple or Google password). You can also add, optionally, a phone number and profile photo. We also keep your theme, weather and AI preferences, and the date you accepted this policy and, if you gave it, your AI consent. <em>You give us this directly when you register or edit your profile.</em></td></tr>
   <tr><th>Wardrobe</th><td>Photos of the clothing items you add (taken with the in-app scanner or chosen from your photo library — we only receive the photos you select) and the details you set: category, type, colour, material, season, brand, tags and favourites. We store the version with the background removed; if background removal is unavailable, the original photo is stored instead.</td></tr>
   <tr><th>Outfits &amp; events</th><td>Outfits you save and the days you mark them as worn, and events you create (name, date, type, dress code and place).</td></tr>
   <tr><th>Conversations</th><td>The messages you send to Ava, the outfits she suggests, and your thumbs-up / thumbs-down feedback on suggestions.</td></tr>
@@ -72,6 +72,8 @@
   <tr><td>Railway</td><td>Servers and database hosting</td><td>Everything the app stores about you (account, wardrobe, outfits, events, conversations)</td></tr>
   <tr><td>Cloudinary</td><td>Image storage and delivery</td><td>Item photos and profile photo</td></tr>
   <tr><td>OpenWeather</td><td>Current weather</td><td>Approximate coordinates, only if location and weather are on</td></tr>
+  <tr><td>Apple</td><td>Sign in with Apple (only if you choose it)</td><td>Apple learns that you signed in to Closetry; we receive a user ID, email and optional name from Apple. When you delete your account we also ask Apple to revoke the sign-in link.</td></tr>
+  <tr><td>Google</td><td>Sign in with Google (only if you choose it)</td><td>Google learns that you signed in to Closetry; we receive a user ID, email and name from Google.</td></tr>
   <tr><td>Resend</td><td>Delivering messages you send through <em>Contact us</em></td><td>Your name, email and message</td></tr>
 </table>
 <p>
@@ -83,7 +85,7 @@
 <h2 id="retention">6. How long we keep data, and deleting it</h2>
 <ul>
   <li><strong>Items and outfits:</strong> kept until you delete them. Deleting an item removes its record <em>and</em> its photo from image storage.</li>
-  <li><strong>Your account:</strong> kept until you delete it. <strong>Profile → Delete account</strong> (confirmed with your password) permanently deletes your profile, items, photos, outfits, events, conversations with Ava, insights and feedback from our database and image storage straight away. Copies cached on the image network can take a short while to expire. This can't be undone.</li>
+  <li><strong>Your account:</strong> kept until you delete it. <strong>Profile → Delete account</strong> (confirmed with your password, or with Apple or Google if you signed up that way) permanently deletes your profile, items, photos, outfits, events, conversations with Ava, insights and feedback from our database and image storage straight away. Copies cached on the image network can take a short while to expire. This can't be undone.</li>
   <li><strong>Messages to us:</strong> kept in our email inbox until we delete them, normally once the matter is resolved.</li>
   <li><strong>Server logs:</strong> kept by our hosting provider for a limited time.</li>
   <li><strong>Providers:</strong> data sent to Anthropic or OpenWeather is handled under their own retention policies, described above and on their websites.</li>
@@ -102,7 +104,7 @@
 
 <h2 id="security">8. Security</h2>
 <p>
-  Data travels over encrypted connections (HTTPS). Passwords are stored only as salted hashes, and your sign-in
+  Data travels over encrypted connections (HTTPS). Passwords (for accounts that use one) are stored only as salted hashes, and your sign-in
   token is kept in the iOS Keychain on your device. Your photos are delivered from an image network using long,
   random, unlisted web addresses that only your signed-in app is given — anyone who somehow had the exact address could
   open that one image. No system is perfectly secure, but we limit access to your data to what's needed to run the service.

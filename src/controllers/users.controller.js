@@ -2,6 +2,7 @@ const prisma = require('../config/db');
 const { hashPassword, verifyPassword } = require('../utils/authUtils');
 const { isValidEmail, isNonEmptyString, THEME_NAMES } = require('../utils/validators');
 const { PUBLIC_USER_FIELDS } = require('./auth.controller');
+const socialAuth = require('../services/socialAuth.service');
 const {
   isConfigured: cloudinaryConfigured, uploadImage, optimizeDeliveryUrl, deleteImageByUrl, deleteUserImages,
 } = require('../config/cloudinary');
@@ -20,6 +21,11 @@ async function updateMe(req, res, next) {
     }
     if (req.body.email !== undefined) {
       if (!isValidEmail(req.body.email)) return res.status(400).json({ error: 'a valid email is required' });
+      // Accounts created with Apple or Google keep the email the provider verified.
+      const current = await prisma.user.findUnique({ where: { id: req.userId }, select: { passwordDisabledAt: true } });
+      if (current && current.passwordDisabledAt != null) {
+        return res.status(400).json({ error: "Your email comes from Apple or Google and can't be changed here." });
+      }
       data.email = req.body.email.toLowerCase().trim();
     }
     if (req.body.phone !== undefined) {
@@ -89,6 +95,9 @@ async function changePassword(req, res, next) {
     }
 
     const user = await prisma.user.findUnique({ where: { id: req.userId } });
+    if (user && user.passwordDisabledAt) {
+      return res.status(400).json({ error: 'This account signs in with Apple or Google and has no password.' });
+    }
     if (!user || !(await verifyPassword(currentPassword, user.passwordHash))) {
       return res.status(401).json({ error: 'Current password is incorrect' });
     }
@@ -101,7 +110,9 @@ async function changePassword(req, res, next) {
   }
 }
 
-// DELETE /api/users/me — Body: { password } required as a confirmation
+// DELETE /api/users/me — Body: { password } (accounts with a password) or
+// { appleIdentityToken, nonce, appleAuthorizationCode? } / { googleIdToken, nonce? } (Apple/Google
+// accounts) required as a confirmation
 // step (not just the bearer token) before a destructive, irreversible
 // action. Every other table cascades from User via onDelete: Cascade in
 // the schema, so this one delete removes everything — items, outfits,
@@ -113,15 +124,42 @@ async function changePassword(req, res, next) {
 // are exactly that.
 async function deleteMe(req, res, next) {
   try {
-    const { password } = req.body;
-    if (!isNonEmptyString(password)) return res.status(400).json({ error: 'password is required to confirm account deletion' });
-
+    const body = req.body || {};
     const user = await prisma.user.findUnique({ where: { id: req.userId } });
-    if (!user || !(await verifyPassword(password, user.passwordHash))) {
-      return res.status(401).json({ error: 'Incorrect password' });
+
+    if (user && user.passwordDisabledAt) {
+      // Account without a password (Apple/Google): confirm with a fresh sign-in
+      // from the provider instead, and make sure it is *this* account's identity.
+      const REAUTH_MAX_AGE_SECONDS = 600;
+      let verified;
+      if (isNonEmptyString(body.appleIdentityToken)) {
+        verified = await socialAuth.verifyAppleIdentityToken(body.appleIdentityToken, { nonce: body.nonce, maxAgeSeconds: REAUTH_MAX_AGE_SECONDS });
+      } else if (isNonEmptyString(body.googleIdToken)) {
+        verified = await socialAuth.verifyGoogleIdToken(body.googleIdToken, {
+          nonce: typeof body.nonce === 'string' ? body.nonce : undefined,
+          maxAgeSeconds: REAUTH_MAX_AGE_SECONDS,
+        });
+      } else {
+        return res.status(400).json({ error: 'Confirm with Apple or Google to delete this account (appleIdentityToken or googleIdToken is required).' });
+      }
+      const identity = await prisma.authIdentity.findUnique({
+        where: { provider_providerUserId: { provider: verified.provider, providerUserId: verified.sub } },
+      });
+      if (!identity || identity.userId !== req.userId) {
+        return res.status(401).json({ error: socialAuth.VERIFY_FAILED });
+      }
+      // Apple requires revoking the Sign in with Apple token. Best effort: it
+      // never blocks the deletion (skipped and logged if not configured).
+      if (verified.provider === 'apple') await socialAuth.revokeAppleAuthorization(body.appleAuthorizationCode);
+    } else {
+      const { password } = body;
+      if (!isNonEmptyString(password)) return res.status(400).json({ error: 'password is required to confirm account deletion' });
+      if (!user || !(await verifyPassword(password, user.passwordHash))) {
+        return res.status(401).json({ error: 'Incorrect password' });
+      }
     }
 
-    await prisma.user.delete({ where: { id: req.userId } });
+    await prisma.user.delete({ where: { id: req.userId } }); // AuthIdentity rows go with it (cascade)
     await deleteUserImages(req.userId);
     res.status(204).send();
   } catch (err) {

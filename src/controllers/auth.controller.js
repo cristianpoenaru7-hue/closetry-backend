@@ -62,10 +62,12 @@ async function me(req, res, next) {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.userId },
-      select: { ...PUBLIC_USER_FIELDS, stylePreferences: true },
+      select: { ...PUBLIC_USER_FIELDS, stylePreferences: true, passwordDisabledAt: true },
     });
     if (!user) return res.status(404).json({ error: 'User not found' });
-    res.json({ user });
+    // hasPassword is optional and additive: false for accounts that sign in with Apple/Google only.
+    const { passwordDisabledAt, ...rest } = user;
+    res.json({ user: { ...rest, hasPassword: passwordDisabledAt == null } });
   } catch (err) {
     next(err);
   }
